@@ -9,6 +9,8 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 dotenv.config();
 
+const pool = require("./database.js");
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
@@ -73,9 +75,9 @@ app.get("/stk", access, async (req, res) => {
         TransactionType: "CustomerPayBillOnline",
         Amount: 1,
         PartyA: process.env.MOBILE_NO,
-        PartyB: "174379",
+        PartyB: shortcode,
         PhoneNumber: process.env.MOBILE_NO,
-        CallBackURL: "https://mydomain.com/pat",
+        CallBackURL: "https://847a-197-237-171-106.ngrok-free.app/callback",
         AccountReference: "Cancer Support System",
         TransactionDesc: "Test",
       },
@@ -85,7 +87,10 @@ app.get("/stk", access, async (req, res) => {
         },
       }
     )
-    .then((data) => res.status(200).json(data))
+    .then((data) => {
+      res.status(200).json(data);
+      console.log(data);
+    })
     .catch((err) => res.status(200).json(err));
 });
 
@@ -105,6 +110,40 @@ function access(req, res, next) {
       next();
     });
 }
+
+app.post("/callback", (req, res) => {
+  const callback = req.body;
+  console.log(callback.Body);
+
+  if (!callback.Body.stkCallback.CallbackMetadata) {
+    console.log("not paid");
+    console.log(callback.Body.stkCallback);
+    return res.json("ok");
+  } else {
+    console.log("paid");
+    console.log(callback.Body.stkCallback.CallbackMetadata);
+
+    const amount = callback.Body.stkCallback.CallbackMetadata.item[0].Value;
+    const transactionId =
+      callback.Body.stkCallback.CallbackMetadata.item[1].Value;
+    const timestamp = callback.Body.stkCallback.CallbackMetadata.item[2].Value;
+    const PhoneNumber =
+      callback.Body.stkCallback.CallbackMetadata.item[3].Value;
+
+    pool.getConnection((err, connection) => {
+      if (err) throw err;
+
+      const query =
+        "INSERT INTO payments(transaction_id, amount, timestamp, phone_no) VALUES(?)";
+      const values = [transactionId, amount, timestamp, PhoneNumber];
+      connection.query(query, [values], (err, data) => {
+        if (err) throw err;
+        console.log("Payment Inserted Successfully");
+      });
+    });
+  }
+});
+
 
 let port = process.env.PORT;
 
