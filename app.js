@@ -20,7 +20,7 @@ app.get("/", (req, res) => {
 });
 
 app.get("/access_token", access, (req, res) => {
-  res.status(200).json({ access_token: req.access_token });
+  res.status(200).json({ access_token: token });
 });
 
 app.get("/register", access, (req, res) => {
@@ -30,7 +30,7 @@ app.get("/register", access, (req, res) => {
   )
     .headers({
       "Content-Type": "application/json",
-      Authorization: "Bearer " + req.access_token,
+      Authorization: "Bearer " + token,
     })
     .send(
       JSON.stringify({
@@ -38,8 +38,6 @@ app.get("/register", access, (req, res) => {
         ResponseType: "Completed",
         ConfirmationURL: "https://mydomain.com/confirmation",
         ValidationURL: "https://mydomain.com/validation",
-        // "ConfirmationURL": "https://197.237.171.106:3000/confirmation",
-        // "ValidationURL": "https://197.237.171.106:3000/validation",
       })
     )
     .end((response) => {
@@ -49,7 +47,9 @@ app.get("/register", access, (req, res) => {
     });
 });
 
-app.get("/stk", access, async (req, res) => {
+let token = "";
+
+app.post("/stk", access, async (request, response) => {
   const date = new Date();
   const timestamp =
     date.getFullYear() +
@@ -65,33 +65,60 @@ app.get("/stk", access, async (req, res) => {
   const password = new Buffer.from(shortcode + passkey + timestamp).toString(
     "base64"
   );
-  await axios
-    .post(
-      "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
-      {
-        BusinessShortCode: shortcode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: "CustomerPayBillOnline",
-        Amount: 1,
-        PartyA: process.env.MOBILE_NO,
-        PartyB: shortcode,
-        PhoneNumber: process.env.MOBILE_NO,
-        CallBackURL: "https://847a-197-237-171-106.ngrok-free.app/callback",
-        AccountReference: "Cancer Support System",
-        TransactionDesc: "Test",
-      },
-      {
-        headers: {
-          Authorization: "Bearer " + req.access_token,
-        },
-      }
-    )
-    .then((data) => {
-      res.status(200).json(data);
-      console.log(data);
-    })
-    .catch((err) => res.status(200).json(err));
+
+
+  // await axios
+  //   .post(
+  //     "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+  //     {
+  //       BusinessShortCode: shortcode,
+  //       Password: password,
+  //       Timestamp: timestamp,
+  //       TransactionType: "CustomerPayBillOnline",
+  //       Amount: 1,
+  //       PartyA: process.env.MOBILE_NO,
+  //       PartyB: shortcode,
+  //       PhoneNumber: process.env.MOBILE_NO,
+  //       CallBackURL: "https://30ef-197-237-171-106.ngrok-free.app/callback",
+  //       AccountReference: "Cancer Support System",
+  //       TransactionDesc: "Test",
+  //     },
+  //     {
+  //       headers: {
+  //         Authorization: "Bearer " + token,
+  //       },
+  //     }
+  //   )
+  //   .then((data) => {
+  //     res.status(200).json(data);
+  //     console.log(data);
+  //   })
+  //   .catch((err) => res.status(200).json(err));
+
+
+  let req = unirest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest')
+.headers({
+	'Content-Type': 'application/json',
+	'Authorization': 'Bearer ' + token
+})
+.send(JSON.stringify({
+    "BusinessShortCode": shortcode,
+    "Password":password,
+    "Timestamp": timestamp,
+    "TransactionType": "CustomerPayBillOnline",
+    "Amount": 1,
+    "PartyA": process.env.MOBILE_NO,
+    "PartyB": shortcode,
+    "PhoneNumber": process.env.MOBILE_NO,
+    "CallBackURL": "https://4de3-197-237-171-106.ngrok-free.app/callback",
+    "AccountReference": "CSS",
+    "TransactionDesc": "Payment of Appointment" 
+  }))
+.end(res => {
+	if (res.error) throw new Error(res.error);
+	console.log(res.body);
+  console.log(res.body.CheckoutRequestID);
+});
 });
 
 function access(req, res, next) {
@@ -106,7 +133,7 @@ function access(req, res, next) {
     .end((response) => {
       if (response.error) throw new Error(response.error);
       console.log(response.raw_body);
-      req.access_token = JSON.parse(response.raw_body).access_token;
+      token = JSON.parse(response.raw_body).access_token;
       next();
     });
 }
@@ -143,6 +170,42 @@ app.post("/callback", (req, res) => {
     });
   }
 });
+
+
+app.get("/check_status",access,(request,response)=>{
+  const date = new Date();
+  const timestamp =
+    date.getFullYear() +
+    ("0" + (date.getMonth() + 1)).slice(-2) +
+    ("0" + date.getDate()).slice(-2) +
+    ("0" + date.getHours()).slice(-2) +
+    ("0" + date.getMinutes()).slice(-2) +
+    ("0" + date.getSeconds()).slice(-2);
+
+  const shortcode = process.env.SHORT_CODE2;
+  const passkey = process.env.PASS_KEY;
+
+  const password = new Buffer.from(shortcode + passkey + timestamp).toString(
+    "base64"
+  );
+
+  let req = unirest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query')
+.headers({
+	'Content-Type': 'application/json',
+	'Authorization': 'Bearer '+token
+})
+.send(JSON.stringify({
+    "BusinessShortCode": shortcode,
+    "Password": password,
+    "Timestamp": timestamp,
+    "CheckoutRequestID": "ws_CO_19042023193450663715013269",
+  }))
+.end(res => {
+	if (res.error) throw new Error(res.error);
+	console.log(res.body.ResultDesc);
+
+});
+})
 
 
 let port = process.env.PORT;
